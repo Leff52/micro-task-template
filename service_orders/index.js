@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 8000;
 app.use(cors());
 app.use(express.json());
 
-// Имитация базы данных в памяти (LocalStorage)
+//(LocalStorage)
 let fakeOrdersDb = {};
 let currentId = 1;
 
