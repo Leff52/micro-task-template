@@ -31,13 +31,7 @@ app.post('/users', (req, res) => {
     res.status(201).json(newUser);
 });
 
-app.get('/users/health', (req, res) => {
-    res.json({
-        status: 'OK',
-        service: 'Users Service',
-        timestamp: new Date().toISOString()
-    });
-});
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'users' }))
 
 app.get('/users/status', (req, res) => {
     res.json({status: 'Users service is running'});
@@ -85,6 +79,4 @@ app.delete('/users/:userId', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Users service running on port ${PORT}`);
-});
+app.listen(3001, () => console.log('Users on :3001'))

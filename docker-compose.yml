@@ -1,27 +1,22 @@
+
 services:
   api_gateway:
-    build: api_gateway
+    build: ./api_gateway
+    env_file: .env
     ports:
-      - "8000:8000"
-    environment:
-      - NODE_ENV=production
-    networks:
-      - app-network
+      - "${PORT_GATEWAY:-3000}:3000"
+    depends_on:
+      - service_users
+      - service_orders
 
   service_users:
-    build: service_users
-    environment:
-      - NODE_ENV=production
-    networks:
-      - app-network
+    build: ./service_users
+    env_file: .env
+    expose:
+      - "3001"
 
   service_orders:
-    build: service_orders
-    environment:
-      - NODE_ENV=production
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
+    build: ./service_orders
+    env_file: .env
+    expose:
+      - "3002"
