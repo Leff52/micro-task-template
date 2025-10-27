@@ -88,6 +88,32 @@ const usersProxy = createProxyMiddleware({
 			})
 	},
 })
+const ordersProxy = createProxyMiddleware({
+	target: process.env.ORDERS_URL, 
+	changeOrigin: true,
+	proxyTimeout: 10000,
+	timeout: 10000,
+	pathRewrite: p => p.replace(/^\/v1\/orders/, ''),
+	onProxyReq: (proxyReq, req) => {
+		proxyReq.setHeader('X-Request-ID', req.id)
+		if (req.user)
+			proxyReq.setHeader(
+				'X-User',
+				JSON.stringify({ id: req.user.sub, roles: req.user.roles || [] })
+			)
+		if (req.rawBody && req.rawBody.length > 0) {
+			proxyReq.setHeader('Content-Length', Buffer.byteLength(req.rawBody))
+			proxyReq.write(req.rawBody)
+		}
+	},
+	onError: (_e, _req, res) =>
+		res
+			.status(502)
+			.json({
+				success: false,
+				error: { code: 'UPSTREAM', message: 'Upstream error' },
+			}),
+})
 // общие опции прокси
 const proxyOpts = target => ({
 	target,
@@ -117,7 +143,7 @@ app.use('/v1/users', authRequired, usersProxy)
 app.use(
 	'/v1/orders',
 	authRequired,
-	createProxyMiddleware(proxyOpts(ORDERS_URL))
+	ordersProxy
 )
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
