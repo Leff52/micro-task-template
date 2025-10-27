@@ -6,7 +6,6 @@ const PORT = process.env.PORT || 8000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
 
 //(LocalStorage)
 let fakeOrdersDb = {};
