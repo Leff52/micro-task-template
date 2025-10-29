@@ -1,0 +1,29 @@
+version: '3.9'
+
+services:
+  api_gateway:
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - SERVICE_NAME=api_gateway
+    volumes:
+      - ./api_gateway:/app
+    command: npm run dev
+
+  service_users:
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - SERVICE_NAME=service_users
+    volumes:
+      - ./service_users:/app
+    command: npm run dev
+
+  service_orders:
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - SERVICE_NAME=service_orders
+    volumes:
+      - ./service_orders:/app
+    command: npm run dev

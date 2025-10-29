@@ -8,16 +8,30 @@ const pino = require('pino')
 const pinoHttp = require('pino-http')
 const { v4: uuidv4 } = require('uuid')
 const http = require('http')
+const swaggerUi = require('swagger-ui-express')
+const YAML = require('yamljs')
+const path = require('path')
 
 const app = express()
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' })
-
 const PORT = Number(process.env.PORT_GATEWAY || 3000)
 const USERS_URL = process.env.USERS_URL
 const ORDERS_URL = process.env.ORDERS_URL
-const JWT_SECRET = process.env.JWT_SECRET || 'change_me'
+const JWT_SECRET = process.env.JWT_SECRET || 'yandex'
 
-app.use(helmet())
+// базовая безопасность и CORS
+app.use(
+	helmet({
+		contentSecurityPolicy: {
+			directives: {
+				defaultSrc: ["'self'"],
+				styleSrc: ["'self'", "'unsafe-inline'"],
+				scriptSrc: ["'self'", "'unsafe-inline'"],
+				imgSrc: ["'self'", 'data:', 'https:'],
+			},
+		},
+	})
+)
 app.use(cors({ origin: true, credentials: true }))
 
 app.use((req, res, next) => {
@@ -46,27 +60,23 @@ const authRequired = (req, res, next) => {
 
 	const auth = req.header('Authorization')
 	if (!auth || !auth.startsWith('Bearer '))
-		return res
-			.status(401)
-			.json({
-				success: false,
-				error: { code: 'UNAUTH', message: 'Token required' },
-			})
+		return res.status(401).json({
+			success: false,
+			error: { code: 'UNAUTH', message: 'Token required' },
+		})
 
 	try {
 		req.user = jwt.verify(auth.slice(7), process.env.JWT_SECRET || 'change_me')
 		next()
 	} catch {
-		res
-			.status(401)
-			.json({
-				success: false,
-				error: { code: 'BAD_TOKEN', message: 'Invalid token' },
-			})
+		res.status(401).json({
+			success: false,
+			error: { code: 'BAD_TOKEN', message: 'Invalid token' },
+		})
 	}
 }
 const usersProxy = createProxyMiddleware({
-	target: process.env.USERS_URL, 
+	target: process.env.USERS_URL,
 	changeOrigin: true,
 	proxyTimeout: 10000,
 	timeout: 10000,
@@ -80,16 +90,14 @@ const usersProxy = createProxyMiddleware({
 			)
 	},
 	onError: (_err, _req, res) => {
-		res
-			.status(502)
-			.json({
-				success: false,
-				error: { code: 'UPSTREAM', message: 'Upstream error' },
-			})
+		res.status(502).json({
+			success: false,
+			error: { code: 'UPSTREAM', message: 'Upstream error' },
+		})
 	},
 })
 const ordersProxy = createProxyMiddleware({
-	target: process.env.ORDERS_URL, 
+	target: process.env.ORDERS_URL,
 	changeOrigin: true,
 	proxyTimeout: 10000,
 	timeout: 10000,
@@ -107,12 +115,10 @@ const ordersProxy = createProxyMiddleware({
 		}
 	},
 	onError: (_e, _req, res) =>
-		res
-			.status(502)
-			.json({
-				success: false,
-				error: { code: 'UPSTREAM', message: 'Upstream error' },
-			}),
+		res.status(502).json({
+			success: false,
+			error: { code: 'UPSTREAM', message: 'Upstream error' },
+		}),
 })
 // общие опции прокси
 const proxyOpts = target => ({
@@ -129,34 +135,42 @@ const proxyOpts = target => ({
 			)
 	},
 	onError: (_err, _req, res) => {
-		res
-			.status(502)
-			.json({
-				success: false,
-				error: { code: 'UPSTREAM', message: 'Upstream error' },
-			})
+		res.status(502).json({
+			success: false,
+			error: { code: 'UPSTREAM', message: 'Upstream error' },
+		})
 	},
 })
 
-// маршруты 
-app.use('/v1/users', authRequired, usersProxy)
+// Swagger UI для документации API
+const swaggerDocument = YAML.load(path.join(__dirname, 'openapi.yaml'))
 app.use(
-	'/v1/orders',
-	authRequired,
-	ordersProxy
+	'/api-docs',
+	swaggerUi.serve,
+	swaggerUi.setup(swaggerDocument, {
+		customCss: '.swagger-ui .topbar { display: none }',
+		customSiteTitle: 'Micro Task Template API',
+	})
 )
+
+// Отдаем OpenAPI спецификацию в JSON формате
+app.get('/openapi.json', (_req, res) => {
+	res.json(swaggerDocument)
+})
+
+// маршруты
+app.use('/v1/users', authRequired, usersProxy)
+app.use('/v1/orders', authRequired, ordersProxy)
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
 // единая обработка ошибок
 app.use((err, _req, res, _next) => {
 	logger.error({ err }, 'Gateway error')
-	res
-		.status(500)
-		.json({
-			success: false,
-			error: { code: 'GATEWAY_ERR', message: 'Internal error' },
-		})
+	res.status(500).json({
+		success: false,
+		error: { code: 'GATEWAY_ERR', message: 'Internal error' },
+	})
 })
 
 const server = http.createServer(app)

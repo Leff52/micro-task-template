@@ -1,3 +1,9 @@
+import { requestLogger } from './middleware/requestLogger.js'
+import { logger } from './utils/logger.js'
+import express from 'express'
+import helmet from 'helmet'
+import cors from 'cors'
+
 const express = require('express')
 const fs = require('fs')
 const { z } = require('zod')
@@ -5,7 +11,11 @@ const { v4: uuidv4 } = require('uuid')
 const pino = require('pino')
 const pinoHttp = require('pino-http')
 const jwt = require('jsonwebtoken')
+
 const app = express()
+app.use(helmet())
+app.use(cors())
+app.use(requestLogger)
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' })
 const PORT = Number(process.env.PORT_ORDERS || 3002)
 const ORDERS_FILE = './data/orders.json'
@@ -23,9 +33,7 @@ const getUserCtx = req => {
 	if (viaGateway) {
 		try {
 			return JSON.parse(viaGateway)
-		} catch {
-
-		}
+		} catch {}
 	}
 
 	const auth = req.header('Authorization')
@@ -34,8 +42,7 @@ const getUserCtx = req => {
 			const token = auth.slice(7)
 			const payload = jwt.verify(token, process.env.JWT_SECRET || 'change_me')
 			return { id: payload.sub, roles: payload.roles || [] }
-		} catch {
-		}
+		} catch {}
 	}
 
 	return null
@@ -55,19 +62,16 @@ const createOrderSchema = z.object({
 
 const statusSchema = z.enum(['created', 'processing', 'completed', 'cancelled'])
 
-
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'orders' }))
 
-// создать заказ 
+// создать заказ
 app.post('/', (req, res) => {
 	const user = getUserCtx(req)
 	if (!user?.id)
-		return res
-			.status(401)
-			.json({
-				success: false,
-				error: { code: 'UNAUTH', message: 'Missing user context' },
-			})
+		return res.status(401).json({
+			success: false,
+			error: { code: 'UNAUTH', message: 'Missing user context' },
+		})
 
 	try {
 		const { items, total } = createOrderSchema.parse(req.body)
@@ -85,25 +89,21 @@ app.post('/', (req, res) => {
 		orders.push(order)
 		saveOrders(orders)
 
-		// событие-заглушка 
+		// событие-заглушка
 		req.log.info({ event: 'order.created', orderId: id, userId: user.id })
 
 		return res.status(201).json({ success: true, data: { id } })
 	} catch (err) {
 		if (err instanceof z.ZodError) {
-			return res
-				.status(400)
-				.json({
-					success: false,
-					error: { code: 'BAD_REQUEST', message: err.errors[0].message },
-				})
-		}
-		return res
-			.status(500)
-			.json({
+			return res.status(400).json({
 				success: false,
-				error: { code: 'INTERNAL', message: 'Server error' },
+				error: { code: 'BAD_REQUEST', message: err.errors[0].message },
 			})
+		}
+		return res.status(500).json({
+			success: false,
+			error: { code: 'INTERNAL', message: 'Server error' },
+		})
 	}
 })
 
@@ -111,44 +111,36 @@ app.post('/', (req, res) => {
 app.get('/:id', (req, res) => {
 	const user = getUserCtx(req)
 	if (!user?.id)
-		return res
-			.status(401)
-			.json({
-				success: false,
-				error: { code: 'UNAUTH', message: 'Missing user context' },
-			})
+		return res.status(401).json({
+			success: false,
+			error: { code: 'UNAUTH', message: 'Missing user context' },
+		})
 
 	const orders = loadOrders()
 	const order = orders.find(o => o.id === req.params.id)
 	if (!order)
-		return res
-			.status(404)
-			.json({
-				success: false,
-				error: { code: 'NOT_FOUND', message: 'Order not found' },
-			})
+		return res.status(404).json({
+			success: false,
+			error: { code: 'NOT_FOUND', message: 'Order not found' },
+		})
 
 	if (order.userId !== user.id && !isAdmin(user))
-		return res
-			.status(403)
-			.json({
-				success: false,
-				error: { code: 'FORBIDDEN', message: 'Not allowed' },
-			})
+		return res.status(403).json({
+			success: false,
+			error: { code: 'FORBIDDEN', message: 'Not allowed' },
+		})
 
 	return res.json({ success: true, data: order })
 })
 
-// список заказов 
+// список заказов
 app.get('/', (req, res) => {
 	const user = getUserCtx(req)
 	if (!user?.id)
-		return res
-			.status(401)
-			.json({
-				success: false,
-				error: { code: 'UNAUTH', message: 'Missing user context' },
-			})
+		return res.status(401).json({
+			success: false,
+			error: { code: 'UNAUTH', message: 'Missing user context' },
+		})
 
 	const page = Math.max(parseInt(req.query.page || '1', 10), 1)
 	const limit = Math.max(parseInt(req.query.limit || '10', 10), 1)
@@ -174,38 +166,32 @@ app.get('/', (req, res) => {
 	res.json({ success: true, data, meta: { page, limit, total: orders.length } })
 })
 
-// обновить статус 
+// обновить статус
 app.patch('/:id/status', (req, res) => {
 	const user = getUserCtx(req)
 	if (!user?.id)
-		return res
-			.status(401)
-			.json({
-				success: false,
-				error: { code: 'UNAUTH', message: 'Missing user context' },
-			})
+		return res.status(401).json({
+			success: false,
+			error: { code: 'UNAUTH', message: 'Missing user context' },
+		})
 
 	const { status } = req.body || {}
 	try {
 		statusSchema.parse(status)
 	} catch {
-		return res
-			.status(400)
-			.json({
-				success: false,
-				error: { code: 'BAD_REQUEST', message: 'Invalid status' },
-			})
+		return res.status(400).json({
+			success: false,
+			error: { code: 'BAD_REQUEST', message: 'Invalid status' },
+		})
 	}
 
 	const orders = loadOrders()
 	const idx = orders.findIndex(o => o.id === req.params.id)
 	if (idx === -1)
-		return res
-			.status(404)
-			.json({
-				success: false,
-				error: { code: 'NOT_FOUND', message: 'Order not found' },
-			})
+		return res.status(404).json({
+			success: false,
+			error: { code: 'NOT_FOUND', message: 'Order not found' },
+		})
 
 	const order = orders[idx]
 
@@ -213,22 +199,18 @@ app.patch('/:id/status', (req, res) => {
 	const owner = order.userId === user.id
 	if (!isAdmin(user)) {
 		if (!owner)
-			return res
-				.status(403)
-				.json({
-					success: false,
-					error: { code: 'FORBIDDEN', message: 'Not allowed' },
-				})
+			return res.status(403).json({
+				success: false,
+				error: { code: 'FORBIDDEN', message: 'Not allowed' },
+			})
 		if (status !== 'cancelled')
-			return res
-				.status(403)
-				.json({
-					success: false,
-					error: { code: 'FORBIDDEN', message: 'Owner can only cancel' },
-				})
+			return res.status(403).json({
+				success: false,
+				error: { code: 'FORBIDDEN', message: 'Owner can only cancel' },
+			})
 	}
 
-	// примитивные переходы 
+	// примитивные переходы
 	const allowed = new Set([
 		'created:processing',
 		'processing:completed',
@@ -237,15 +219,13 @@ app.patch('/:id/status', (req, res) => {
 	])
 	const key = `${order.status}:${status}`
 	if (order.status !== status && !isAdmin(user) && !allowed.has(key))
-		return res
-			.status(409)
-			.json({
-				success: false,
-				error: {
-					code: 'BAD_STATUS_FLOW',
-					message: `Illegal transition ${key}`,
-				},
-			})
+		return res.status(409).json({
+			success: false,
+			error: {
+				code: 'BAD_STATUS_FLOW',
+				message: `Illegal transition ${key}`,
+			},
+		})
 
 	order.status = status
 	order.updatedAt = nowISO()
@@ -267,12 +247,10 @@ app.patch('/:id/status', (req, res) => {
 // обработчик ошибок
 app.use((err, _req, res, _next) => {
 	logger.error(err)
-	res
-		.status(500)
-		.json({
-			success: false,
-			error: { code: 'INTERNAL', message: 'Server error' },
-		})
+	res.status(500).json({
+		success: false,
+		error: { code: 'INTERNAL', message: 'Server error' },
+	})
 })
 
 app.listen(PORT, () => logger.info({ port: PORT }, 'Orders service started'))

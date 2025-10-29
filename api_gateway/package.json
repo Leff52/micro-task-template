@@ -18,7 +18,9 @@
     "opossum": "^7.0.0",
     "pino": "^10.1.0",
     "pino-http": "^11.0.0",
-    "uuid": "^13.0.0"
+    "swagger-ui-express": "^5.0.0",
+    "uuid": "^13.0.0",
+    "yamljs": "^0.3.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
