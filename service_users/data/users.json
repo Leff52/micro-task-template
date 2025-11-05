@@ -29,5 +29,47 @@
       "manager"
     ],
     "createdAt": "2025-11-05T05:06:47.248Z"
+  },
+  {
+    "id": "965d6877-9525-46c2-aee2-74a3844a85dd",
+    "email": "user_1762344829731@example.com",
+    "name": "User One",
+    "password": "$2b$10$heuLeYLm8k8FiG9dXLeZmuCQaCk5b4ygA73lKBXjkj54yMKJOxId2",
+    "roles": [
+      "user",
+      "manager"
+    ],
+    "createdAt": "2025-11-05T12:13:49.926Z"
+  },
+  {
+    "id": "fde63985-a1c3-484a-8a1b-250462f7474b",
+    "email": "user2_1762344829731@example.com",
+    "name": "User Two",
+    "password": "$2b$10$/g/vIrkkm8jUNVxWSA/kF.l1Fs/OC5uqcaA2jvnCurlby/XOgz8C2",
+    "roles": [
+      "user"
+    ],
+    "createdAt": "2025-11-05T12:13:50.301Z"
+  },
+  {
+    "id": "8957ed6b-2005-4939-a19f-b863a7007f67",
+    "email": "user_1762344953976@example.com",
+    "name": "User One",
+    "password": "$2b$10$8WqbXOeK5FsMwtjc0wePC.OlSB7SdVmfhC88jUAk08DuNdgw1KZPu",
+    "roles": [
+      "user",
+      "manager"
+    ],
+    "createdAt": "2025-11-05T12:15:54.183Z"
+  },
+  {
+    "id": "81448b26-a7a6-4976-a2d6-075e484c46f8",
+    "email": "user2_1762344953976@example.com",
+    "name": "User Two",
+    "password": "$2b$10$ajD837PYMo4oHJVbb5v.iufR9wiLrXJCM46ix4EBBXI1IVxpgnTe2",
+    "roles": [
+      "user"
+    ],
+    "createdAt": "2025-11-05T12:15:54.545Z"
   }
 ]

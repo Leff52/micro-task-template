@@ -1,14 +1,22 @@
 {
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^5.1.0",
-    "express-rate-limit": "^8.2.1",
-    "helmet": "^8.1.0",
-    "http-proxy-middleware": "^3.0.5",
-    "js-yaml": "^4.1.0",
-    "pino": "^10.1.0",
-    "pino-http": "^11.0.0",
-    "pino-pretty": "^13.1.2",
-    "swagger-ui-express": "^5.0.1"
-  }
+	"dependencies": {
+		"cors": "^2.8.5",
+		"express": "^5.1.0",
+		"express-rate-limit": "^8.2.1",
+		"helmet": "^8.1.0",
+		"http-proxy-middleware": "^3.0.5",
+		"js-yaml": "^4.1.0",
+		"pino": "^10.1.0",
+		"pino-http": "^11.0.0",
+		"pino-pretty": "^13.1.2",
+		"swagger-ui-express": "^5.0.1"
+	},
+	"devDependencies": {
+		"axios": "^1.13.2",
+		"chai": "^4.5.0",
+		"mocha": "^11.7.5"
+	},
+	"scripts": {
+		"test:e2e": "mocha tests/e2e.spec.js --timeout 30000"
+	}
 }

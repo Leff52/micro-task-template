@@ -16,11 +16,11 @@ services:
     env_file: .env
     volumes:
       - ./openapi.yaml:/app/openapi.yaml:ro
-    expose:
-      - "4001"
+    ports:
+      - "4001:4001"
 
   service_orders:
     build: ./service_orders
     env_file: .env
-    expose:
-      - "4002"
+    ports:
+      - "4002:4002"
