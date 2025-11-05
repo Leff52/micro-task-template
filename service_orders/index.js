@@ -1,256 +1,178 @@
-import { requestLogger } from './middleware/requestLogger.js'
-import { logger } from './utils/logger.js'
-import express from 'express'
-import helmet from 'helmet'
-import cors from 'cors'
+﻿const express = require('express');
+const cors = require('cors');
+const fs = require('fs').promises;
+const path = require('path');
+const { z } = require('zod');
+const { v4: uuidv4 } = require('uuid');
+const jwt = require('jsonwebtoken');
+const pinoHttp = require('pino-http');
 
-const express = require('express')
-const fs = require('fs')
-const { z } = require('zod')
-const { v4: uuidv4 } = require('uuid')
-const pino = require('pino')
-const pinoHttp = require('pino-http')
-const jwt = require('jsonwebtoken')
+const { logger } = require('./utils/logger');
+const { requestLogger } = require('./middleware/requestLogger');
 
-const app = express()
-app.use(helmet())
-app.use(cors())
-app.use(requestLogger)
-const logger = pino({ level: process.env.LOG_LEVEL || 'info' })
-const PORT = Number(process.env.PORT_ORDERS || 3002)
-const ORDERS_FILE = './data/orders.json'
+const PORT = process.env.PORT || 4002;
+const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
+const DATA_DIR = path.join(__dirname, 'data');
+const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
 
-app.use(express.json())
-app.use(pinoHttp({ logger }))
-
-const loadOrders = () => JSON.parse(fs.readFileSync(ORDERS_FILE, 'utf8'))
-const saveOrders = data =>
-	fs.writeFileSync(ORDERS_FILE, JSON.stringify(data, null, 2))
-const nowISO = () => new Date().toISOString()
-
-const getUserCtx = req => {
-	const viaGateway = req.header('X-User')
-	if (viaGateway) {
-		try {
-			return JSON.parse(viaGateway)
-		} catch {}
-	}
-
-	const auth = req.header('Authorization')
-	if (auth && auth.startsWith('Bearer ')) {
-		try {
-			const token = auth.slice(7)
-			const payload = jwt.verify(token, process.env.JWT_SECRET || 'change_me')
-			return { id: payload.sub, roles: payload.roles || [] }
-		} catch {}
-	}
-
-	return null
+async function readOrders() {
+  try {
+    const raw = await fs.readFile(ORDERS_FILE, 'utf8');
+    return JSON.parse(raw);
+  } catch (e) {
+    if (e.code === 'ENOENT') return [];
+    throw e;
+  }
 }
 
-const isAdmin = ctx => Array.isArray(ctx?.roles) && ctx.roles.includes('admin')
+async function writeOrders(orders) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  const tmp = ORDERS_FILE + '.tmp';
+  await fs.writeFile(tmp, JSON.stringify(orders, null, 2), 'utf8');
+  await fs.rename(tmp, ORDERS_FILE);
+}
 
-const itemSchema = z.object({
-	sku: z.string().min(1),
-	qty: z.number().int().positive(),
-	price: z.number().nonnegative(),
-})
-const createOrderSchema = z.object({
-	items: z.array(itemSchema).min(1),
-	total: z.number().nonnegative(),
-})
+function authRequired(req, res, next) {
+  const header = req.headers.authorization || '';
+  const [, token] = header.split(' ');
+  if (!token) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing Bearer token' } });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // { id, email, roles }
+    next();
+  } catch {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' } });
+  }
+}
 
-const statusSchema = z.enum(['created', 'processing', 'completed', 'cancelled'])
+function isAdmin(req) {
+  return Array.isArray(req.user?.roles) && req.user.roles.includes('admin');
+}
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'orders' }))
+const OrderCreateSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().max(1000).optional(),
+});
 
-// создать заказ
-app.post('/', (req, res) => {
-	const user = getUserCtx(req)
-	if (!user?.id)
-		return res.status(401).json({
-			success: false,
-			error: { code: 'UNAUTH', message: 'Missing user context' },
-		})
+const StatusSchema = z.object({
+  status: z.enum(['created', 'processing', 'completed', 'cancelled']),
+});
 
-	try {
-		const { items, total } = createOrderSchema.parse(req.body)
-		const orders = loadOrders()
-		const id = uuidv4()
-		const order = {
-			id,
-			userId: user.id,
-			items,
-			total,
-			status: 'created',
-			createdAt: nowISO(),
-			updatedAt: nowISO(),
-		}
-		orders.push(order)
-		saveOrders(orders)
+function parsePagination(query) {
+  const page = Math.max(1, parseInt(query.page || '1', 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit || '10', 10) || 10));
+  return { page, limit, offset: (page - 1) * limit };
+}
 
-		// событие-заглушка
-		req.log.info({ event: 'order.created', orderId: id, userId: user.id })
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(pinoHttp({ logger }));
+app.use(requestLogger);
 
-		return res.status(201).json({ success: true, data: { id } })
-	} catch (err) {
-		if (err instanceof z.ZodError) {
-			return res.status(400).json({
-				success: false,
-				error: { code: 'BAD_REQUEST', message: err.errors[0].message },
-			})
-		}
-		return res.status(500).json({
-			success: false,
-			error: { code: 'INTERNAL', message: 'Server error' },
-		})
-	}
-})
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'orders' }));
 
-// получить заказ по id
-app.get('/:id', (req, res) => {
-	const user = getUserCtx(req)
-	if (!user?.id)
-		return res.status(401).json({
-			success: false,
-			error: { code: 'UNAUTH', message: 'Missing user context' },
-		})
+app.post('/', authRequired, async (req, res) => {
+  const parse = OrderCreateSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parse.error.message } });
+  }
 
-	const orders = loadOrders()
-	const order = orders.find(o => o.id === req.params.id)
-	if (!order)
-		return res.status(404).json({
-			success: false,
-			error: { code: 'NOT_FOUND', message: 'Order not found' },
-		})
+  const now = new Date().toISOString();
+  const order = {
+    id: uuidv4(),
+    title: parse.data.title,
+    description: parse.data.description || '',
+    ownerId: req.user.id,
+    status: 'created',
+    createdAt: now,
+    updatedAt: now,
+  };
 
-	if (order.userId !== user.id && !isAdmin(user))
-		return res.status(403).json({
-			success: false,
-			error: { code: 'FORBIDDEN', message: 'Not allowed' },
-		})
+  const orders = await readOrders();
+  orders.push(order);
+  await writeOrders(orders);
 
-	return res.json({ success: true, data: order })
-})
+  return res.status(201).json({ success: true, data: order });
+});
 
-// список заказов
-app.get('/', (req, res) => {
-	const user = getUserCtx(req)
-	if (!user?.id)
-		return res.status(401).json({
-			success: false,
-			error: { code: 'UNAUTH', message: 'Missing user context' },
-		})
+app.get('/', authRequired, async (req, res) => {
+  const { page, limit, offset } = parsePagination(req.query);
+  const wantAll = req.query.all === '1' || req.query.all === 'true';
 
-	const page = Math.max(parseInt(req.query.page || '1', 10), 1)
-	const limit = Math.max(parseInt(req.query.limit || '10', 10), 1)
-	const sort = req.query.sort || 'createdAt:desc'
+  const orders = await readOrders();
+  const visible = isAdmin(req) && wantAll ? orders : orders.filter(o => o.ownerId === req.user.id);
 
-	let [field, dir] = sort.split(':')
-	field = ['createdAt', 'updatedAt', 'total', 'status'].includes(field)
-		? field
-		: 'createdAt'
-	dir = dir === 'asc' ? 'asc' : 'desc'
+  const total = visible.length;
+  const items = visible.slice(offset, offset + limit);
+  const pages = Math.max(1, Math.ceil(total / limit));
 
-	const orders = loadOrders().filter(o =>
-		isAdmin(user) ? true : o.userId === user.id
-	)
+  return res.json({ success: true, data: { items, page, limit, total, pages } });
+});
 
-	orders.sort((a, b) => {
-		if (a[field] === b[field]) return 0
-		return (a[field] > b[field] ? 1 : -1) * (dir === 'asc' ? 1 : -1)
-	})
+app.get('/:id', authRequired, async (req, res) => {
+  const orders = await readOrders();
+  const order = orders.find(o => o.id === req.params.id);
+  if (!order) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
+  }
+  if (order.ownerId !== req.user.id && !isAdmin(req)) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
+  }
+  return res.json({ success: true, data: order });
+});
 
-	const start = (page - 1) * limit
-	const data = orders.slice(start, start + limit)
-	res.json({ success: true, data, meta: { page, limit, total: orders.length } })
-})
+// владелец может только 'cancelled',а админ admin  'processing'|'completed'|'cancelled'
+app.patch('/:id/status', authRequired, async (req, res) => {
+  const parse = StatusSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parse.error.message } });
+  }
+  const newStatus = parse.data.status;
 
-// обновить статус
-app.patch('/:id/status', (req, res) => {
-	const user = getUserCtx(req)
-	if (!user?.id)
-		return res.status(401).json({
-			success: false,
-			error: { code: 'UNAUTH', message: 'Missing user context' },
-		})
+  const orders = await readOrders();
+  const idx = orders.findIndex(o => o.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
+  }
 
-	const { status } = req.body || {}
-	try {
-		statusSchema.parse(status)
-	} catch {
-		return res.status(400).json({
-			success: false,
-			error: { code: 'BAD_REQUEST', message: 'Invalid status' },
-		})
-	}
+  const order = orders[idx];
 
-	const orders = loadOrders()
-	const idx = orders.findIndex(o => o.id === req.params.id)
-	if (idx === -1)
-		return res.status(404).json({
-			success: false,
-			error: { code: 'NOT_FOUND', message: 'Order not found' },
-		})
+  // правила доступа
+  if (isAdmin(req)) {
+    // admin  любые из перечисленных, без доп ограничений
+  } else {
+    if (order.ownerId !== req.user.id) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your order' } });
+    }
+    if (newStatus !== 'cancelled') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Owner can only set status to cancelled' },
+      });
+    }
+  }
 
-	const order = orders[idx]
+  if (order.status === 'completed' && !isAdmin(req)) {
+    return res.status(409).json({
+      success: false,
+      error: { code: 'STATUS_LOCKED', message: 'Completed order cannot be changed by owner' },
+    });
+  }
 
-	// владелец — только cancel, admin — любые переходы
-	const owner = order.userId === user.id
-	if (!isAdmin(user)) {
-		if (!owner)
-			return res.status(403).json({
-				success: false,
-				error: { code: 'FORBIDDEN', message: 'Not allowed' },
-			})
-		if (status !== 'cancelled')
-			return res.status(403).json({
-				success: false,
-				error: { code: 'FORBIDDEN', message: 'Owner can only cancel' },
-			})
-	}
+  order.status = newStatus;
+  order.updatedAt = new Date().toISOString();
+  orders[idx] = order;
+  await writeOrders(orders);
 
-	// примитивные переходы
-	const allowed = new Set([
-		'created:processing',
-		'processing:completed',
-		'created:cancelled',
-		'processing:cancelled',
-	])
-	const key = `${order.status}:${status}`
-	if (order.status !== status && !isAdmin(user) && !allowed.has(key))
-		return res.status(409).json({
-			success: false,
-			error: {
-				code: 'BAD_STATUS_FLOW',
-				message: `Illegal transition ${key}`,
-			},
-		})
+  return res.json({ success: true, data: order });
+});
 
-	order.status = status
-	order.updatedAt = nowISO()
-	orders[idx] = order
-	saveOrders(orders)
-
-	req.log.info({
-		event: 'order.status_updated',
-		orderId: order.id,
-		to: status,
-		by: user.id,
-	})
-	return res.json({
-		success: true,
-		data: { id: order.id, status: order.status },
-	})
-})
-
-// обработчик ошибок
 app.use((err, _req, res, _next) => {
-	logger.error(err)
-	res.status(500).json({
-		success: false,
-		error: { code: 'INTERNAL', message: 'Server error' },
-	})
-})
+  logger.error({ err }, 'Unhandled error');
+  res.status(500).json({ success: false, error: { code: 'INTERNAL', message: 'Server error' } });
+});
 
-app.listen(PORT, () => logger.info({ port: PORT }, 'Orders service started'))
+app.listen(PORT, () => logger.info({ port: PORT }, 'Orders service started'));
