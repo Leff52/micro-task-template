@@ -1,34 +1,36 @@
-import { randomUUID } from 'crypto'
-import { logger } from '../utils/logger.js'
+const { randomUUID } = require('crypto');
+const { logger } = require('../utils/logger');
 
-export function requestLogger(req, res, next) {
-	const requestId = req.headers['x-request-id'] || randomUUID()
-	req.requestId = requestId
-	res.setHeader('X-Request-Id', requestId)
+function requestLogger(req, res, next) {
+  const requestId = req.headers['x-request-id'] || randomUUID();
+  req.requestId = requestId;
+  res.setHeader('X-Request-Id', requestId);
 
-	const start = Date.now()
-	logger.info(
-		{
-			service: process.env.SERVICE_NAME,
-			requestId,
-			method: req.method,
-			url: req.originalUrl,
-		},
-		'Incoming request'
-	)
+  const start = Date.now();
+  logger.info(
+    {
+      service: process.env.SERVICE_NAME || 'users',
+      requestId,
+      method: req.method,
+      url: req.originalUrl,
+    },
+    'Request started'
+  );
 
-	res.on('finish', () => {
-		const duration = Date.now() - start
-		logger.info(
-			{
-				service: process.env.SERVICE_NAME,
-				requestId,
-				status: res.statusCode,
-				duration,
-			},
-			'Request completed'
-		)
-	})
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info(
+      {
+        service: process.env.SERVICE_NAME || 'users',
+        requestId,
+        status: res.statusCode,
+        duration,
+      },
+      'Request completed'
+    );
+  });
 
-	next()
+  next();
 }
+
+module.exports = { requestLogger };

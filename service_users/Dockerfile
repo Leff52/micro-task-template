@@ -5,5 +5,5 @@ RUN npm ci --omit=dev
 COPY . .
 RUN mkdir -p /app/data && \
     if [ ! -f /app/data/users.json ]; then echo "[]" > /app/data/users.json; fi
-EXPOSE 3001
+EXPOSE 4001
 CMD ["node", "index.js"]

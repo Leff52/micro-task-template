@@ -1,9 +1,33 @@
 [
-	{
-		"id": "00000000-0000-0000-0000-000000000001",
-		"email": "admin@example.com",
-		"name": "System Admin",
-		"password": "$2b$10$k1aapaVzu.ewHsKMp9ugPOsN.fgUx3onfMjb44OZHVySZZlfXK9tK",
-		"roles": ["admin", "user"]
-	}
+  {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "email": "admin@example.com",
+    "name": "System Admin",
+    "password": "$2b$10$k1aapaVzu.ewHsKMp9ugPOsN.fgUx3onfMjb44OZHVySZZlfXK9tK",
+    "roles": [
+      "admin",
+      "user"
+    ]
+  },
+  {
+    "id": "95ed79c8-fee9-4b8d-896a-5a7b3b9883c8",
+    "email": "nodetest@example.com",
+    "name": "Node Test",
+    "password": "$2b$10$o5YmHs5h9M//6kemfUjSVu3vrg/jrvNxREaI0NEsYNXhhbIMymV3O",
+    "roles": [
+      "user"
+    ],
+    "createdAt": "2025-11-05T05:05:15.321Z"
+  },
+  {
+    "id": "f0eb8515-82aa-4ec5-b140-d9094a3ceba1",
+    "email": "gateway@example.com",
+    "name": "Gateway Test",
+    "password": "$2b$10$OlrMJjXOq7hvM/0QKCiIKO9T3Ox6SHXj8A3eMwfr4paOSkUGX7H6i",
+    "roles": [
+      "user",
+      "manager"
+    ],
+    "createdAt": "2025-11-05T05:06:47.248Z"
+  }
 ]

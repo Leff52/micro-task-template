@@ -13,10 +13,10 @@ services:
     build: ./service_users
     env_file: .env
     expose:
-      - "3001"
+      - "4001"
 
   service_orders:
     build: ./service_orders
     env_file: .env
     expose:
-      - "3002"
+      - "4002"

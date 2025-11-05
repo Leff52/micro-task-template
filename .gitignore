@@ -3,3 +3,4 @@ node_modules
 # Тестовые файлы
 test-*.js
 test-*.ps1
+test_*.js
