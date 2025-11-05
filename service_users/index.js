@@ -1,6 +1,7 @@
 ﻿const express = require('express');
 const cors = require('cors');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -220,6 +221,18 @@ app.patch('/:id/roles', authRequired, adminOnly, async (req, res) => {
   const { password: _, ...safe } = users[idx];
   return res.json({ success: true, data: safe });
 });
+
+const yaml = require('js-yaml');
+const swaggerUi = require('swagger-ui-express');
+
+try {
+  const specPath = path.join(__dirname, 'openapi.yaml'); // файл скопирован в /app при сборке
+  const spec = yaml.load(fsSync.readFileSync(specPath, 'utf8'));
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec, { explorer: true }));
+  logger.info({ specPath }, 'Swagger UI mounted at /docs');
+} catch (e) {
+  logger.warn({ err: e }, 'Swagger is not mounted (openapi.yaml not found or parse error)');
+}
 
 app.use((err, _req, res, _next) => {
   logger.error({ err }, 'Unhandled error');

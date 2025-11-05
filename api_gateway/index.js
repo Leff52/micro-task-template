@@ -55,8 +55,8 @@ app.use(limiter)
 const authRequired = (req, res, next) => {
 	const fullPath = req.originalUrl || req.url
 	const open = new Set(['/v1/users/register', '/v1/users/login'])
-	// пропускает открытые маршруты
-	if (open.has(fullPath)) return next()
+	// пропускаем открытые маршруты и документацию
+	if (open.has(fullPath) || fullPath.startsWith('/v1/users/docs')) return next()
 
 	const auth = req.header('Authorization')
 	if (!auth || !auth.startsWith('Bearer '))

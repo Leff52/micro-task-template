@@ -10,8 +10,12 @@ services:
       - service_orders
 
   service_users:
-    build: ./service_users
+    build:
+      context: .
+      dockerfile: ./service_users/Dockerfile
     env_file: .env
+    volumes:
+      - ./openapi.yaml:/app/openapi.yaml:ro
     expose:
       - "4001"
 
