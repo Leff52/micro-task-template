@@ -155,10 +155,11 @@ app.patch('/:id/status', authRequired, async (req, res) => {
     }
   }
 
-  if (order.status === 'completed' && !isAdmin(req)) {
+  // completed заказ нельзя изменить никому
+  if (order.status === 'completed') {
     return res.status(409).json({
       success: false,
-      error: { code: 'STATUS_LOCKED', message: 'Completed order cannot be changed by owner' },
+      error: { code: 'STATUS_LOCKED', message: 'Completed order cannot be changed' },
     });
   }
 

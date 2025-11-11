@@ -17,6 +17,9 @@
 		"mocha": "^11.7.5"
 	},
 	"scripts": {
-		"test:e2e": "mocha tests/e2e.spec.js --timeout 30000"
+		"test:e2e": "mocha tests/e2e.spec.js --timeout 30000",
+		"test:users": "mocha tests/users.spec.js --timeout 30000",
+		"test:orders": "mocha tests/orders.spec.js --timeout 30000",
+		"test": "mocha tests/**/*.spec.js --timeout 30000"
 	}
 }
